@@ -1,1 +1,44 @@
-<!DOCTYPE html><html><head><title>Google Drive - Virus scan warning</title><meta http-equiv="content-type" content="text/html; charset=utf-8"/><style nonce="BPYyJss76esCBJzlfbjywA">.goog-link-button{position:relative;color:#15c;text-decoration:underline;cursor:pointer}.goog-link-button-disabled{color:#ccc;text-decoration:none;cursor:default}body{color:#222;font:normal 13px/1.4 arial,sans-serif;margin:0}.grecaptcha-badge{visibility:hidden}.uc-main{padding-top:50px;text-align:center}#uc-dl-icon{display:inline-block;margin-top:16px;padding-right:1em;vertical-align:top}#uc-text{display:inline-block;max-width:68ex;text-align:left}.uc-error-caption,.uc-warning-caption{color:#222;font-size:16px}#uc-download-link{text-decoration:none}.uc-name-size a{color:#15c;text-decoration:none}.uc-name-size a:visited{color:#61c;text-decoration:none}.uc-name-size a:active{color:#d14836;text-decoration:none}.uc-footer{color:#777;font-size:11px;padding-bottom:5ex;padding-top:5ex;text-align:center}.uc-footer a{color:#15c}.uc-footer a:visited{color:#61c}.uc-footer a:active{color:#d14836}.uc-footer-divider{color:#ccc;width:100%}.goog-inline-block{position:relative;display:-moz-inline-box;display:inline-block}* html .goog-inline-block{display:inline}*:first-child+html .goog-inline-block{display:inline}sentinel{}</style><link rel="icon" href="//ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png"/></head><body><div class="uc-main"><div id="uc-dl-icon" class="image-container"><div class="drive-sprite-aux-download-file"></div></div><div id="uc-text"><p class="uc-warning-caption">Google Drive can't scan this file for viruses.</p><p class="uc-warning-subcaption">This file is executable and may harm your computer. <p class="uc-warning-subcaption"><span class="uc-name-size"><a href="/open?id=1_viJdErqr6IPAzgsSVCmk5K_GfEayGp3">sdr_recordfastscan.py</a> (1.7k)</span></p></p><form id="download-form" action="https://drive.usercontent.google.com/download" method="get"><input type="submit" id="uc-download-link" class="goog-inline-block jfk-button jfk-button-action" value="Download anyway"/><input type="hidden" name="id" value="1_viJdErqr6IPAzgsSVCmk5K_GfEayGp3"><input type="hidden" name="export" value="download"><input type="hidden" name="confirm" value="t"><input type="hidden" name="uuid" value="29dd0457-2baa-413f-aa2b-67ad05cd78dc"></form></div></div><div class="uc-footer"><hr class="uc-footer-divider"></div></body></html>
+import time
+from rtlsdr import RtlSdr
+import numpy as np
+
+def record_sdr(frequency, sample_rate=2.56e6, duration=2, file_name="sdr_data.bin", chunk_size=256*1024):  # Use 2.56 MHz sample rate
+    print(f"Initializing RTL-SDR for frequency: {frequency/1e6:.3f} MHz")
+    sdr = RtlSdr()
+
+    # Set the frequency and sample rate
+    sdr.sample_rate = sample_rate  # 2.56 MHz sample rate to capture wider bandwidth
+    sdr.center_freq = frequency    # Hz
+    sdr.gain = 'auto'
+    sdr.set_direct_sampling(2)     # Optional for increased buffer size
+
+    num_samples = int(sample_rate * duration)
+    total_samples_read = 0
+    print(f"Saving IQ data to {file_name}")
+
+    with open(file_name, 'ab') as f:  # Append to a single file
+        while total_samples_read < num_samples:
+            samples = sdr.read_samples(min(chunk_size, num_samples - total_samples_read))
+            np.save(f, samples)
+            total_samples_read += len(samples)
+            print(f"Chunk saved. Total samples read now: {total_samples_read}")
+            time.sleep(0.05)  # Reduced delay to speed up the scan
+
+    sdr.close()
+
+# Capture 5 MHz chunks from 100 kHz to 100 MHz
+start_freq = 100e3    # 100 kHz
+end_freq = 100e6      # 100 MHz
+step_size = 5e6       # 5 MHz step size (each chunk captures 2.56 MHz of bandwidth)
+
+# Generate the frequency range in 5 MHz steps
+frequencies = np.arange(start_freq, end_freq, step_size)
+print(f"Total frequencies to scan: {len(frequencies)}")
+
+# Record all frequency chunks into 1 or 2 files
+file_name = "sdr_data_fastscan.bin"  # Single output file
+for freq in frequencies:
+    print(f"Starting recording for {freq/1e6:.3f} MHz")
+    record_sdr(freq, file_name=file_name)  # Append data to the same file
+    print(f"Finished recording for {freq/1e6:.3f} MHz")
+
